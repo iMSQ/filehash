@@ -1,0 +1,127 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+output: 
+  html_document:
+    keep_md: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Loading and preprocessing the data
+- steps: Number of steps taking in a 5-minute interval
+- date: The date on which the measurement was taken in YYYY-MM-DD format
+- interval: Identifier for the 5-minute interval in which measurement was taken
+
+```{r read}
+dfile <- read.csv("H:/R/Coursera/activity.csv", header = TRUE)
+dfile$date <- as.Date(dfile$date)
+summary(dfile)
+```
+
+### What is mean total number of steps taken per day?
+
+```{r mean}
+library(plyr)
+dfile <- ddply(dfile, .(date),
+    mutate,
+    per_day = sum(steps))
+mean_steps <- mean(dfile$per_day, na.rm = TRUE)
+mean_steps <- format(round(mean_steps, 0), scientific=FALSE)
+median_steps <- median(dfile$per_day, na.rm = TRUE)
+median_steps <- format(round(median_steps, 0), scientific=FALSE)
+
+hist(dfile$per_day, col="red" , breaks=25, xlab = "Steps per day", 
+    main = "Total number of steps taken per day")
+
+mean_steps
+median_steps
+```
+
+The mean total number of steps taken per day is `r mean_steps`, the median is `r median_steps`.
+
+### What is the average daily activity pattern?
+
+```{r TSplot}
+dfile <- ddply(dfile, .(interval),
+ mutate,
+  meanSteps = mean(steps, na.rm = TRUE))
+library(ggplot2)
+ggplot(dfile, aes(interval, meanSteps)) + geom_line() +
+    scale_x_continuous("Interval") + scale_y_continuous("Average number of steps") +
+    ggtitle("Time series plot")
+
+maxSteps = max(dfile$meanSteps, na.rm = TRUE)
+maxInt <- unique(dfile[which(dfile$meanSteps == maxSteps), "interval"])
+```
+
+The 5-minute interval number `r maxInt` contains the maximum number of steps.
+
+
+### Imputing missing values
+
+```{r missed}
+nNA = length(dfile$steps) - length(dfile$steps[!is.na(dfile$steps)])
+nNA
+```
+
+The dataset contains `r nNA` missing values.
+I'll impute the missing data by using the mean number of steps per 5-minute interval.
+
+```{r impute}
+# create the new variable
+dfile$stepsImp <- dfile$steps
+# impute the missed values for steps
+dfile$stepsImp[is.na(dfile$stepsImp)] <- dfile$meanSteps[is.na(dfile$stepsImp)]
+# create the new dataset (with imputed values)
+dfile2 <- dfile[order(dfile$date), c("stepsImp", "date", "interval")]
+colnames(dfile2) <- c("steps", "date", "interval")
+head(dfile2)
+```
+
+```{r mean2}
+dfile2 <- ddply(dfile2, .(date),
+ mutate,
+  per_day2 = sum(steps))
+mean_steps2 <- mean(dfile2$per_day2, na.rm = TRUE)
+mean_steps2 <- format(round(mean_steps2, 0), scientific=FALSE)
+median_steps2 <- median(dfile2$per_day2, na.rm = TRUE)
+median_steps2 <- format(round(median_steps2, 0), scientific=FALSE)
+
+hist(dfile2$per_day2, col="red" , breaks=25, xlab = "Steps per day", 
+    main = "Total number of steps taken per day (Imputed)")
+
+mean_steps2
+median_steps2
+```
+
+The mean total number of steps taken per day is `r mean_steps2`, the median is `r median_steps2`. We can see that after imputation the mean and median total number of steps taken per day are equal. On histogram we can also see high peak around 10k-11k steps (with more that 2 times higher frequecy).
+
+
+### Are there differences in activity patterns between weekdays and weekends?
+
+```{r weekdays}
+dfile2 <- ddply(dfile2, .(interval),
+    mutate,
+    day = weekdays(date),
+    weekend = ifelse(day %in% c("Saturday", "Sunday"), "Weekend", "Weekday"),
+    meanSteps2 = mean(steps, na.rm = TRUE))
+# create a new factor variable
+head(dfile2)
+```
+
+```{r TSplot2}
+dfile2 <- ddply(dfile2, .(interval, weekend),
+    mutate,
+    meanSteps2 = mean(steps, na.rm = TRUE))
+#plot
+ggplot(dfile2, mapping = aes(interval, meanSteps2)) + geom_line() + 
+    facet_grid(weekend ~ ., scales="fixed") +
+    scale_x_continuous("Interval") + 
+    scale_y_continuous("Average number of steps") +
+    ggtitle("Time series plot") 
+```
+
+From the plot above we can see that the average number of steps taken on weekdays and weekends differs. On weekdays the main activity is before 10 AM (the peak is around 8 AM), while on 
+weekends the activity is spread through the day.
